@@ -101,8 +101,9 @@ Data Limitation
 
 ⸻
 
-🏗️ Project Structure
+## 🏗️ Project Structure
 
+```
 fashion-recommendation-system/
 │
 ├── configs/          # Configuration files
@@ -128,7 +129,7 @@ fashion-recommendation-system/
 ├── results/          # Model results and figures
 ├── tests/            # Tests
 └── docs/             # Project documentation
-
+```
 ⸻
 
 🛠 Tech Stack
