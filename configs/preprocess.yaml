@@ -1,0 +1,138 @@
+paths:
+  raw_dir: data/raw
+  articles_file: articles.csv
+  customers_file: customers.csv
+  transactions_file: transactions_train.csv
+  image_dir: data/raw/images
+  processed_dir: data/processed
+
+load:
+  transactions_nrows: null   # 개발 중 빠른 확인용. null이면 전체. 설정 시 dry run(저장 안 함)
+
+articles:
+  excluded_product_groups:
+    - Items
+    - Furniture
+    - Garment and Shoe care
+    - Stationery
+    - Interior textile
+    - Fun
+    - Cosmetic
+    # Unknown 그룹은 유지: test 주 거래의 약 1.5%이고 최근 주에 늘어 지우면 평가셋이 왜곡됨
+
+  non_fashion_types:
+    - Washing bag
+    - Sewing kit
+    - Stain remover spray
+    - Clothing mist
+    - Wood balls
+    - Zipper head
+    - Marker pen
+    - Side table
+    - Soft Toys
+    - Waterbottle
+    - Giftbox
+    - Dog Wear
+    - Umbrella
+    - Sleeping sack
+    - Sleep Bag
+    - Baby Bib
+    - Nipple covers
+    - Bra extender
+
+  type_merge_mapping:
+    # 표기 불일치
+    Earrings: Earring
+    Flat shoes: Flat shoe
+    Cap: Cap/peaked
+    # 헤어 액세서리
+    Alice band: Hair/alice band
+    Hairband: Hair/alice band
+    Headband: Hair/alice band
+    # 가방류
+    Backpack: Bag
+    Cross-body bag: Bag
+    Tote bag: Bag
+    Shoulder bag: Bag
+    Weekend/Gym bag: Bag
+    Bumbag: Bag
+    # 모자류
+    Felt hat: Hat/beanie
+    Bucket hat: Hat/beanie
+    Straw hat: Hat/beanie
+
+  min_type_count: 50
+  rare_type_prefix: "Other_"
+
+  # garment_group_name == "Unknown" 인 행에만 적용. key: product_type_name
+  garment_group_mapping:
+    T-shirt: Jersey Basic
+    Vest top: Jersey Basic
+    Top: Jersey Fancy
+    Polo shirt: Jersey Fancy
+    Shirt: Shirts
+    Blouse: Blouses
+    Bodysuit: Jersey Basic
+    Garment Set: Dressed
+    Sweater: Knitwear
+    Cardigan: Knitwear
+    Hoodie: Jersey Fancy
+    Jacket: Outdoor
+    Coat: Outdoor
+    Outdoor Waistcoat: Outdoor
+    Tailored Waistcoat: Dressed
+    Blazer: Dressed
+    Trousers: Trousers
+    Outdoor trousers: Outdoor
+    Shorts: Shorts
+    Skirt: Skirts
+    Dress: Dresses Ladies
+    Jumpsuit/Playsuit: Dressed
+    Dungarees: Trousers
+    Bra: "Under-, Nightwear"
+    Underwear bottom: "Under-, Nightwear"
+    Underwear body: "Under-, Nightwear"
+    Underwear Tights: "Under-, Nightwear"
+    Swimsuit: Swimwear
+    Bikini top: Swimwear
+    Swimwear top: Swimwear
+    Swimwear bottom: Swimwear
+    Swimwear set: Swimwear
+    Socks: Socks and Tights
+    Leggings/Tights: Socks and Tights
+    Sneakers: Shoes
+    Boots: Shoes
+    Bootie: Shoes
+    Pumps: Shoes
+    Sandals: Shoes
+    Heeled sandals: Shoes
+    Flat shoe: Shoes
+    Flip flop: Shoes
+    Slippers: Shoes
+    Hat/beanie: Accessories
+    Cap/peaked: Accessories
+    Scarf: Accessories
+    Gloves: Accessories
+    Belt: Accessories
+    Sunglasses: Accessories
+    Bag: Accessories
+    Wallet: Accessories
+    Ring: Accessories
+    Earring: Accessories
+    Necklace: Accessories
+    Bracelet: Accessories
+    Hair/alice band: Accessories
+    Hair clip: Accessories
+    Other accessories: Accessories
+    Costumes: Accessories
+
+customers:
+  age_bins: [0, 19, 29, 39, 49, 59, 120]
+  age_labels: ["16-19", "20s", "30s", "40s", "50s", "60+"]
+  unknown_label: Unknown
+  subscribed_frequencies: [Regularly, Monthly]
+  drop_columns: [postal_code, FN, fashion_news_frequency]
+
+split:
+  test_weeks: 1
+  valid_weeks: 1

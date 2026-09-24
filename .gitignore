@@ -234,10 +234,11 @@ env/
 .ipynb_checkpoints/
 
 # Data
-data/raw/
-data/interim/
-data/processed/
-data/embeddings/
+data/raw/*
+data/interim/*
+data/processed/*
+data/embeddings/*
+!data/**/.gitkeep
 
 # Models
 *.pt
@@ -253,3 +254,6 @@ results/models/
 # IDE
 .vscode/
 .idea/
+
+# .git/info/exclude
+docs/preprocess_spec.md
