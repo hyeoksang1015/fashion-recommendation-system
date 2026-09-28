@@ -1,0 +1,7 @@
+processed_dir: data/processed
+output_dir: results/baseline
+target_split: valid                       # 평가 분할 (test는 최종 비교 때만)
+features_config: configs/features.yaml    # 인기 기간, top_k, 그룹 기준
+evaluation_config: configs/evaluation.yaml  # k, 지표 목록
+# 상품 그룹은 정답을 그룹 상품으로 걸러서 보므로 precision은 의미가 없다
+item_group_metrics: [recall, map]
