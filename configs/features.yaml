@@ -1,0 +1,6 @@
+recent_week_window: 1          # 최근 인기 baseline용
+age_group_week_window: 4       # 나이대별 인기용, 5.4절 검증 근거
+top_k: 12
+cold_warm_threshold: 5
+item_frequency_quantiles: [0.33, 0.67]
+unknown_label: Unknown         # age_group / product_group_name의 결측 라벨 (preprocess.yaml과 동일)
