@@ -7,11 +7,13 @@
     - 추천 리스트에 같은 상품이 반복되면 첫 번째만 hit로 센다
     - AP@k 분모는 min(정답 수, k) (H&M 대회 MAP@12 정의)
     - 평가 대상은 정답셋에 있는(구매가 있는) 유저뿐이다
+    - evaluate_users_per_user는 유저별 점수 배열을, evaluate_users는 그 평균을 낸다
     - article_id는 정수(parquet dtype 그대로). 추천과 정답의 타입이 다르면 에러
 """
 
 import math
 import numbers
+import numpy as np
 
 
 def _hit_flags(recommended: list[int], relevant: set[int], k: int) -> list[bool]:
@@ -178,6 +180,44 @@ METRIC_FUNCS = {
 }
 
 
+def evaluate_users_per_user(
+    recommendations: dict[str, list[int]],
+    ground_truth: dict[str, set[int]],
+    k: int,
+    metrics: list[str],
+) -> dict[str, np.ndarray]:
+    """정답셋 유저별 지표 점수를 배열로 낸다.
+
+    정답셋에 없는 유저의 추천은 무시한다. 정답셋 유저가 추천에 없으면 빈 리스트로
+    보고 0점을 준다. 시작할 때 추천과 정답의 article_id 타입이 같은지 확인한다.
+
+    Args:
+        recommendations: {customer_id: 순위순 추천 article_id 리스트}.
+        ground_truth: {customer_id: 실제 구매 article_id 집합}.
+        k: 자를 순위.
+        metrics: 계산할 지표 이름 (precision, recall, ndcg, map).
+
+    Returns:
+        {지표 이름: 유저별 점수 배열}. 배열 순서는 ground_truth의 key 순서다.
+
+    Raises:
+        ValueError: 모르는 지표 이름이거나, 정답셋이 비었거나, 추천과 정답의
+            article_id 타입이 다를 때.
+    """
+    unknown = set(metrics) - set(METRIC_FUNCS)
+    if unknown:
+        raise ValueError(f"모르는 지표: {sorted(unknown)}")
+    if not ground_truth:
+        raise ValueError("ground_truth가 비어 있음")
+    _check_item_types(recommendations, ground_truth)
+    scores: dict[str, list[float]] = {name: [] for name in metrics}
+    for user, relevant in ground_truth.items():
+        recommended = recommendations.get(user, [])
+        for name in metrics:
+            scores[name].append(METRIC_FUNCS[name](recommended, relevant, k))
+    return {name: np.array(values) for name, values in scores.items()}
+
+
 def evaluate_users(
     recommendations: dict[str, list[int]],
     ground_truth: dict[str, set[int]],
@@ -186,9 +226,7 @@ def evaluate_users(
 ) -> dict[str, float]:
     """정답셋 유저 기준으로 지표별 평균 점수를 낸다.
 
-    정답셋에 없는 유저의 추천은 무시한다. 정답셋 유저가 추천에 없으면 빈 리스트로
-    보고 0점을 준다(추천을 못 준 것도 성능에 반영). 시작할 때 추천과 정답의
-    article_id 타입이 같은지 확인한다.
+    evaluate_users_per_user의 유저별 점수를 유저 순서대로 더해 평균한다.
 
     Args:
         recommendations: {customer_id: 순위순 추천 article_id 리스트}.
@@ -203,15 +241,8 @@ def evaluate_users(
         ValueError: 모르는 지표 이름이거나, 정답셋이 비었거나, 추천과 정답의
             article_id 타입이 다를 때.
     """
-    unknown = set(metrics) - set(METRIC_FUNCS)
-    if unknown:
-        raise ValueError(f"모르는 지표: {sorted(unknown)}")
-    if not ground_truth:
-        raise ValueError("ground_truth가 비어 있음")
-    _check_item_types(recommendations, ground_truth)
-    totals = dict.fromkeys(metrics, 0.0)
-    for user, relevant in ground_truth.items():
-        recommended = recommendations.get(user, [])
-        for name in metrics:
-            totals[name] += METRIC_FUNCS[name](recommended, relevant, k)
-    return {name: total / len(ground_truth) for name, total in totals.items()}
+    per_user = evaluate_users_per_user(recommendations, ground_truth, k, metrics)
+    return {
+        name: sum(values.tolist()) / len(ground_truth)
+        for name, values in per_user.items()
+    }
