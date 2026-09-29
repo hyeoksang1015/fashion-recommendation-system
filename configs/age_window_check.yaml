@@ -1,0 +1,3 @@
+baseline_config: configs/baseline.yaml    # 경로, 평가 분할, features/evaluation config
+windows: [1, 2, 4, 8]                     # 나이대별 인기 집계 기간(주) 후보
+output_path: results/baseline/age_window_check.json

@@ -1,0 +1,12 @@
+bpr_config: configs/bpr.yaml             # 경로/분할과 BPR 설정 (num_threads 1 유지)
+als_config: configs/als_best.yaml         # ALS 최종 설정
+output_path: results/bpr/robustness.json
+per_user_path: results/bpr/per_user_metrics.parquet
+metrics: [recall, map]                    # 유저별 저장, bootstrap, 시드 반복 대상
+# 두 모델 모두 이 seed들로 다시 학습한다. seeds[0] 모델로 유저별 지표, bootstrap,
+# hit 순위, 카탈로그 커버리지를 계산한다 (42 = als.yaml / bpr.yaml의 seed).
+seeds: [42, 0, 1]
+bootstrap:
+  n_resamples: 1000
+  seed: 42
+  ci_level: 0.95
