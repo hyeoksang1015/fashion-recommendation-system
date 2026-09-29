@@ -1,0 +1,16 @@
+processed_dir: data/processed
+output_dir: results/als
+target_split: valid                       # 평가 분할 (test는 최종 비교 때만)
+features_config: configs/features.yaml    # fallback 인기 기간, 그룹 기준
+evaluation_config: configs/evaluation.yaml  # k, 지표 목록
+item_group_metrics: [recall, map]         # baseline.yaml과 동일
+
+# 튜닝 전 시작값
+factors: 64
+regularization: 0.01
+iterations: 15
+alpha: 1.0                # confidence = 1 + alpha * 구매 횟수
+train_weeks: null         # null이면 train 전체, 정수면 마지막 N주만 사용
+filter_already_purchased: false
+k: 12
+seed: 42

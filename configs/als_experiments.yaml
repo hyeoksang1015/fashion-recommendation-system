@@ -1,0 +1,7 @@
+base_config: configs/als.yaml             # 조합에 없는 값은 이 config 기본값
+output_path: results/als/experiments.json
+# 모든 조합(곱집합)을 실행한다. 추천 단계 키(filter_already_purchased, k)만 다른
+# 조합은 같은 학습 모델을 재사용한다.
+grid:
+  filter_already_purchased: [false, true]
+  train_weeks: [null, 8, 4, 2]

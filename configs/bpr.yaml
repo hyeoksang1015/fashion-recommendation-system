@@ -1,0 +1,18 @@
+processed_dir: data/processed
+output_dir: results/bpr
+target_split: valid                       # 평가 분할 (test는 최종 비교 때만)
+features_config: configs/features.yaml    # fallback 인기 기간, 그룹 기준
+evaluation_config: configs/evaluation.yaml  # k, 지표 목록
+item_group_metrics: [recall, map]         # baseline.yaml과 동일
+als_config: configs/als_best.yaml         # 비교할 ALS 최종 설정
+
+# 튜닝 전 시작값 (factors는 ALS와 같게, 나머지는 implicit 기본값)
+factors: 64
+learning_rate: 0.01
+regularization: 0.01
+iterations: 100
+train_weeks: 4            # als_best.yaml과 동일
+filter_already_purchased: false
+k: 12
+seed: 42
+num_threads: 1            # 여러 스레드면 seed를 고정해도 결과가 실행마다 달라진다

@@ -1,0 +1,11 @@
+base_config: configs/als.yaml             # overrides에 없는 값은 이 config 기본값
+overrides:                                # experiments.json 최고 조합
+  train_weeks: 4
+  filter_already_purchased: false
+output_path: results/als/best_config_diagnostics.json
+# 재확인 평가: train 안에서 split_by_week를 다시 적용해 평가 주를 과거로 옮긴다.
+# week_idx < test_weeks는 버리고, 다음 valid_weeks주를 평가, 나머지를 train으로 쓴다.
+# train의 최소 week_idx가 2이므로 아래 값이면 평가 = week 2, train = week 3 이후.
+recheck:
+  test_weeks: 2
+  valid_weeks: 1
