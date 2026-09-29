@@ -1,10 +1,19 @@
 """baseline 파이프라인의 그룹 분할 테스트.
 
 라벨에 없는 유저가 기본 라벨(cold)로 가는지, 상품 필터 후 정답이 빈 유저가 빠지는지,
-상품 그룹 평가에서 precision 없이 recall/map만 나오는지 확인한다.
+상품 그룹 평가에서 precision 없이 recall/map만 나오는지 확인한다. age_fallback
+집계 기간을 바꾸면 나이대 목록이 바뀌고, 나이 결측/미등록 유저는 전체 인기를 받는지
+확인한다.
 """
 
-from src.pipeline.baseline import evaluate_baseline, filter_items, split_users
+import pandas as pd
+from src.features.popularity import compute_overall_popularity
+from src.pipeline.baseline import (
+    build_age_fallback,
+    evaluate_baseline,
+    filter_items,
+    split_users,
+)
 
 GT = {"u1": {1, 2}, "u2": {3}, "u3": {4}}
 
@@ -36,3 +45,31 @@ def test_evaluate_baseline_structure():
     assert set(out["new_items"]) == {"recall", "map", "n_users"}
     assert out["new_items"]["recall"] == 0
     assert out["empty"] == {"n_users": 0}
+
+
+def test_build_age_fallback_window():
+    # week 2(최근): u1이 10을 산다. week 3: u2, u3가 11을 산다 (모두 20s)
+    train = pd.DataFrame(
+        {
+            "customer_id": pd.Categorical(["u1", "u2", "u3"]),
+            "article_id": pd.array([10, 11, 11], dtype="int32"),
+            "week_idx": pd.array([2, 3, 3], dtype="int16"),
+        }
+    )
+    customers = pd.DataFrame(
+        {
+            "customer_id": ["u1", "u2", "u3", "u4"],
+            "age_group": pd.Categorical(
+                ["20s", "20s", "20s", "Unknown"], categories=["20s", "Unknown"]
+            ),
+        }
+    )
+    cfg = {"top_k": 2, "unknown_label": "Unknown"}
+    overall = compute_overall_popularity(train)
+    users = ["u1", "u4", "u9"]  # u9는 customers에 없음
+
+    one = build_age_fallback(users, train, customers, overall, cfg, 1)
+    two = build_age_fallback(users, train, customers, overall, cfg, 2)
+    assert one["u1"] == [10, 11]  # 1주: 10만 팔림, 전체 인기로 채움
+    assert two["u1"] == [11, 10]  # 2주: 11 구매자 2명
+    assert one["u4"] == one["u9"] == [11, 10]  # 전체 인기
