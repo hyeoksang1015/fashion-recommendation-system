@@ -6,7 +6,8 @@
     1. ALS와 같은 config(als_best)로 평가 환경을 만들고 ALS를 학습한다.
     2. ALS 행렬에 이력이 있는 커버 유저만 평가 대상으로 삼는다 (프로필에 이력이 필요).
     3. 커버 유저에게 이미지 프로필 추천(후보는 임베딩 전체)과 ALS 추천을 만든다.
-    4. 같은 정답셋으로 두 추천을 평가하고, 재구매 비율과 hit 구성을 진단한다.
+       이미 산 상품을 뺀 변형(als_filter, image_filter)도 함께 만든다.
+    4. 같은 정답셋으로 추천을 평가하고, 재구매 비율과 hit 구성을 진단한다.
 """
 
 import logging
@@ -30,6 +31,9 @@ from src.utils.config import load_config
 logger = logging.getLogger(__name__)
 
 IMAGE = "image_profile"
+# 이미 산 상품을 뺀 추가 비교 (7.2절). 이름은 표 열 너비(14자)에 맞춘다.
+ALS_FILTER = "als_filter"
+IMAGE_FILTER = "image_filter"
 
 
 def diagnose(
@@ -68,7 +72,7 @@ def run_image_profile(config: dict) -> dict:
         split, k, metrics, results, diagnostics, info 키를 가진 dict.
 
     Raises:
-        ValueError: 이미지 추천이 커버 유저 전원에게 만들어지지 않았을 때.
+        ValueError: 어떤 모델의 추천 유저가 커버 유저와 다를 때.
     """
     als_config = apply_overrides(load_config(config["als_config"]))
     ctx = load_eval_context(als_config)
@@ -78,11 +82,15 @@ def run_image_profile(config: dict) -> dict:
     als_recs, _ = recommend_with_fallback(
         fitted, ctx["users"], ctx["fallback"], als_config
     )
+    filtered_config = {**als_config, "filter_already_purchased": True}
+    als_filtered, _ = recommend_with_fallback(
+        fitted, ctx["users"], ctx["fallback"], filtered_config
+    )
     users = list(als_recs)
     ground_truth = {user: ctx["ground_truth"][user] for user in users}
 
     article_ids, embeddings = load_embeddings(config["embedding_dir"])
-    image_recs = recommend_for_users(
+    image_args = (
         fitted["matrix"],
         fitted["user_ids"],
         fitted["item_ids"],
@@ -92,12 +100,20 @@ def run_image_profile(config: dict) -> dict:
         k,
         config["chunk_size"],
     )
-    if len(image_recs) != len(users):
-        raise ValueError(
-            f"이미지 추천 유저 {len(image_recs)}명, 커버 유저 {len(users)}명"
-        )
+    image_recs = recommend_for_users(*image_args)
+    image_filtered = recommend_for_users(*image_args, filter_already_purchased=True)
+    models = {
+        MODEL: als_recs,
+        IMAGE: image_recs,
+        ALS_FILTER: als_filtered,
+        IMAGE_FILTER: image_filtered,
+    }
+    for name, recs in models.items():
+        if set(recs) != set(users):
+            raise ValueError(
+                f"{name} 추천 유저 {len(recs)}명, 커버 유저 {len(users)}명"
+            )
 
-    models = {MODEL: als_recs, IMAGE: image_recs}
     covered_ctx = {**ctx, "ground_truth": ground_truth, "users": users}
     results = evaluate_models(covered_ctx, models, config["item_group_metrics"])
     purchased = purchased_pairs(ctx["train"], users)
