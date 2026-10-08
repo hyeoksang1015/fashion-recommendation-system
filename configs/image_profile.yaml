@@ -1,0 +1,5 @@
+als_config: configs/als_best.yaml    # base + overrides 구조. 학습 기간, k를 ALS와 맞춘다
+embedding_dir: data/embeddings       # embeddings.npy, article_ids.npy
+output_dir: results/image_profile
+item_group_metrics: [recall, map]    # als.yaml과 동일
+chunk_size: 512                      # 한 번에 계산할 유저 수 (512 x 104,798 float32 약 215MB)
