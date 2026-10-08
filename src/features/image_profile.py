@@ -70,31 +70,42 @@ def recommend_by_image(
     item_embeddings: np.ndarray,
     k: int = 12,
     chunk_size: int = 512,
+    exclude: sparse.csr_matrix | None = None,
 ) -> np.ndarray:
     """프로필과 유사도가 높은 상위 k개 상품의 행 인덱스를 반환한다.
 
     Description:
         유저를 청크로 나눠 내적을 계산하고 argpartition으로 O(N)에
-        상위 k개를 모은 뒤, 그 k개만 정렬한다.
+        상위 k개를 모은 뒤, 그 k개만 정렬한다. exclude의 0이 아닌 칸은
+        유사도를 -inf로 바꿔 추천에서 뺀다 (청크당 비용은 그 칸 수에 비례).
 
     Args:
         profiles: (유저, dim) 프로필.
         item_embeddings: (후보 상품, dim) 전체 임베딩.
         k: 추천 개수.
         chunk_size: 한 번에 계산할 유저 수. 메모리 상한을 정한다.
+        exclude: (유저, 후보 상품) 희소 행렬. 0이 아닌 칸은 추천에서 뺀다.
 
     Returns:
         (유저, k) int64 배열. 유사도 내림차순, 값은 임베딩 행 인덱스.
 
     Raises:
-        ValueError: k가 후보 수 이상일 때.
+        ValueError: k가 후보 수 이상이거나 exclude 모양이 맞지 않을 때.
     """
     if k >= item_embeddings.shape[0]:
         raise ValueError("k는 후보 수보다 작아야 합니다")
+    if exclude is not None and exclude.shape != (
+        profiles.shape[0],
+        item_embeddings.shape[0],
+    ):
+        raise ValueError("exclude 모양이 (유저, 후보 상품)과 다릅니다")
     result = np.empty((profiles.shape[0], k), dtype=np.int64)
     for start in range(0, profiles.shape[0], chunk_size):
         end = start + chunk_size
         sims = profiles[start:end] @ item_embeddings.T
+        if exclude is not None:
+            seen = exclude[start:end].tocoo()
+            sims[seen.row, seen.col] = -np.inf
         top = np.argpartition(-sims, k, axis=1)[:, :k]
         top_sims = np.take_along_axis(sims, top, axis=1)
         order = np.argsort(-top_sims, axis=1)
@@ -143,6 +154,7 @@ def recommend_for_users(
     users: list[str],
     k: int = 12,
     chunk_size: int = 512,
+    filter_already_purchased: bool = False,
 ) -> dict[str, list[int]]:
     """학습 행렬에 이력이 있는 유저에게 이미지 프로필 추천을 만든다.
 
@@ -159,6 +171,7 @@ def recommend_for_users(
         users: 추천 대상 customer_id 목록.
         k: 추천 개수.
         chunk_size: recommend_by_image의 청크 크기.
+        filter_already_purchased: True면 matrix에서 산 상품을 추천에서 뺀다.
 
     Returns:
         {customer_id: [article_id(int), ...]}.
@@ -169,7 +182,16 @@ def recommend_for_users(
     rows = pd.Index(user_ids).get_indexer(users)
     found = rows >= 0
     item_emb = align_embeddings(item_ids, article_ids, embeddings)
-    profiles = build_user_profiles(matrix[rows[found]], item_emb)
-    top = recommend_by_image(profiles, embeddings, k, chunk_size)
+    sub = matrix[rows[found]]
+    profiles = build_user_profiles(sub, item_emb)
+    exclude = None
+    if filter_already_purchased:
+        coo = sub.tocoo()
+        emb_rows = pd.Index(article_ids).get_indexer(item_ids)
+        exclude = sparse.csr_matrix(
+            (np.ones(coo.nnz, dtype=bool), (coo.row, emb_rows[coo.col])),
+            shape=(sub.shape[0], embeddings.shape[0]),
+        )
+    top = recommend_by_image(profiles, embeddings, k, chunk_size, exclude)
     kept = np.asarray(users, dtype=object)[found]
     return dict(zip(kept, article_ids[top].tolist()))

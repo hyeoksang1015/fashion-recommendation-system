@@ -123,3 +123,42 @@ def test_recommend_for_users_uses_full_candidates_and_skips_unknown():
     assert all(len(r) == 3 and set(r) <= valid for r in recs.values())
     # 유저 a는 상품 10만 샀으므로 프로필이 10과 같아 1위는 10 자신이다
     assert recs["a"][0] == 10
+
+
+def test_recommend_by_image_exclude_matches_masked_argsort():
+    emb = _unit_embeddings(60, 8)
+    prof = _unit_embeddings(6, 8, seed=2)
+    mask = np.zeros((6, 60), dtype=bool)
+    mask[np.arange(6)[:, None], np.arange(6)[:, None] + np.arange(4)] = True
+    sims = np.where(mask, -np.inf, prof @ emb.T)
+    expected = np.argsort(-sims, axis=1)[:, :5]
+    exclude = sparse.csr_matrix(mask)
+    got = recommend_by_image(prof, emb, k=5, chunk_size=4, exclude=exclude)
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_recommend_by_image_exclude_shape_mismatch_raises():
+    emb = _unit_embeddings(10, 4)
+    with pytest.raises(ValueError):
+        recommend_by_image(emb[:3], emb, k=2, exclude=sparse.csr_matrix((2, 10)))
+
+
+def test_recommend_for_users_filter_already_purchased():
+    article_ids = np.array([40, 30, 20, 10, 50])
+    emb = _unit_embeddings(5, 8)
+    item_ids = np.array([10, 20, 30, 40])
+    matrix = sparse.csr_matrix(
+        np.array([[1, 0, 0, 0], [0, 2, 0, 1], [0, 0, 1, 0]], dtype=np.float32)
+    )
+    recs = recommend_for_users(
+        matrix,
+        np.array(["a", "b", "c"], dtype=object),
+        item_ids,
+        article_ids,
+        emb,
+        ["a", "b"],
+        k=3,
+        filter_already_purchased=True,
+    )
+    assert 10 not in recs["a"]
+    assert not {20, 40} & set(recs["b"])
