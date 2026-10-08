@@ -6,7 +6,9 @@ from scipy import sparse
 from src.features.image_profile import (
     align_embeddings,
     build_user_profiles,
+    load_embeddings,
     recommend_by_image,
+    recommend_for_users,
 )
 
 
@@ -81,3 +83,43 @@ def test_recommend_raises_when_k_not_less_than_candidates():
     emb = _unit_embeddings(5, 4)
     with pytest.raises(ValueError):
         recommend_by_image(emb, emb, k=5)
+
+
+def test_load_embeddings_roundtrip_and_validation(tmp_path):
+    emb = _unit_embeddings(6, 4)
+    np.save(tmp_path / "embeddings.npy", emb)
+    np.save(tmp_path / "article_ids.npy", np.arange(6, dtype=np.int32))
+    ids, loaded = load_embeddings(str(tmp_path))
+    assert ids.dtype == np.int64
+    np.testing.assert_array_equal(loaded, emb)
+
+    np.save(tmp_path / "embeddings.npy", emb * 2)
+    with pytest.raises(ValueError):
+        load_embeddings(str(tmp_path))
+
+    np.save(tmp_path / "embeddings.npy", emb[:5])
+    with pytest.raises(ValueError):
+        load_embeddings(str(tmp_path))
+
+
+def test_recommend_for_users_uses_full_candidates_and_skips_unknown():
+    article_ids = np.array([40, 30, 20, 10, 50])
+    emb = _unit_embeddings(5, 8)
+    item_ids = np.array([10, 20, 30, 40])
+    matrix = sparse.csr_matrix(
+        np.array([[1, 0, 0, 0], [0, 2, 0, 1], [0, 0, 1, 0]], dtype=np.float32)
+    )
+    recs = recommend_for_users(
+        matrix,
+        np.array(["a", "b", "c"], dtype=object),
+        item_ids,
+        article_ids,
+        emb,
+        ["b", "zzz", "a"],
+        k=3,
+    )
+    assert list(recs) == ["b", "a"]
+    valid = set(article_ids.tolist())
+    assert all(len(r) == 3 and set(r) <= valid for r in recs.values())
+    # 유저 a는 상품 10만 샀으므로 프로필이 10과 같아 1위는 10 자신이다
+    assert recs["a"][0] == 10

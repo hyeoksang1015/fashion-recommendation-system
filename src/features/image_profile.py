@@ -1,6 +1,7 @@
 """이미지 임베딩 기반 유저 프로필 추천."""
 
 import numpy as np
+import os
 import pandas as pd
 from scipy import sparse
 
@@ -99,3 +100,76 @@ def recommend_by_image(
         order = np.argsort(-top_sims, axis=1)
         result[start:end] = np.take_along_axis(top, order, axis=1)
     return result
+
+
+def load_embeddings(
+    embedding_dir: str, sample: int = 1000, atol: float = 1e-3
+) -> tuple[np.ndarray, np.ndarray]:
+    """저장된 article_id와 임베딩을 읽고 형태를 검증한다.
+
+    Description:
+        두 파일은 같은 행 순서로 저장돼 있어야 한다. 앞쪽 일부 행의 노름이
+        1인지 확인해 정규화 누락(내적이 코사인이 아니게 되는 문제)을 잡는다.
+
+    Args:
+        embedding_dir: article_ids.npy, embeddings.npy가 있는 폴더.
+        sample: 정규화를 확인할 앞쪽 행 수.
+        atol: 노름이 1에서 벗어나도 허용하는 오차.
+
+    Returns:
+        (article_ids int64 (N,), embeddings (N, dim)).
+
+    Raises:
+        FileNotFoundError: 파일이 없을 때.
+        ValueError: 행 수가 다르거나 L2 정규화가 되어 있지 않을 때.
+    """
+    ids_path = os.path.join(embedding_dir, "article_ids.npy")
+    emb_path = os.path.join(embedding_dir, "embeddings.npy")
+    article_ids = np.load(ids_path).astype(np.int64)
+    embeddings = np.load(emb_path)
+    if embeddings.shape[0] != article_ids.shape[0]:
+        raise ValueError("article_ids와 embeddings의 행 수가 다릅니다")
+    if not np.allclose(np.linalg.norm(embeddings[:sample], axis=1), 1.0, atol=atol):
+        raise ValueError("임베딩이 L2 정규화되어 있지 않습니다")
+    return article_ids, embeddings
+
+
+def recommend_for_users(
+    matrix: sparse.csr_matrix,
+    user_ids: np.ndarray,
+    item_ids: np.ndarray,
+    article_ids: np.ndarray,
+    embeddings: np.ndarray,
+    users: list[str],
+    k: int = 12,
+    chunk_size: int = 512,
+) -> dict[str, list[int]]:
+    """학습 행렬에 이력이 있는 유저에게 이미지 프로필 추천을 만든다.
+
+    Description:
+        행렬 행으로 프로필을 만들고, 후보는 행렬 열(ALS 후보)이 아니라
+        임베딩 전체로 둔다. 행렬에 없는 유저는 결과에서 빠진다.
+
+    Args:
+        matrix: (유저, 상품) 학습 행렬.
+        user_ids: matrix 행에 대응하는 customer_id.
+        item_ids: matrix 열에 대응하는 article_id.
+        article_ids: embeddings 각 행에 대응하는 article_id.
+        embeddings: (전체 상품, dim) L2 정규화 임베딩.
+        users: 추천 대상 customer_id 목록.
+        k: 추천 개수.
+        chunk_size: recommend_by_image의 청크 크기.
+
+    Returns:
+        {customer_id: [article_id(int), ...]}.
+
+    Raises:
+        ValueError: 행렬 상품이 임베딩에 없거나 k가 후보 수 이상일 때.
+    """
+    rows = pd.Index(user_ids).get_indexer(users)
+    found = rows >= 0
+    item_emb = align_embeddings(item_ids, article_ids, embeddings)
+    profiles = build_user_profiles(matrix[rows[found]], item_emb)
+    top = recommend_by_image(profiles, embeddings, k, chunk_size)
+    kept = np.asarray(users, dtype=object)[found]
+    return dict(zip(kept, article_ids[top].tolist()))
